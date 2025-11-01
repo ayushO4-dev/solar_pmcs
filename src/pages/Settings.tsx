@@ -154,16 +154,16 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">API Configuration</h3>
+      <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">API Configuration</h3>
         <div className="space-y-4">
           <div>
-            <label className="text-sm text-slate-400 mb-2 block">API Server Address</label>
+            <label className="text-sm text-gray-600 mb-2 block">API Server Address</label>
             <input
               type="text"
               value={apiServer}
               onChange={(e) => setApiServer(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-600 text-white px-4 py-3 rounded-lg focus:outline-none focus:border-amber-500"
+              className="w-full bg-white border border-gray-300 text-gray-900 px-4 py-3 rounded-lg focus:outline-none focus:border-amber-500"
               placeholder="http://localhost:3000"
             />
           </div>
@@ -177,18 +177,18 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Sensor Calibration Offsets</h3>
+      <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Sensor Calibration Offsets</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
           {Object.entries(offsets).map(([sensor, value]) => (
             <div key={sensor}>
-              <label className="text-sm text-slate-400 mb-2 block capitalize">{sensor}</label>
+              <label className="text-sm text-gray-600 mb-2 block capitalize">{sensor}</label>
               <input
                 type="number"
                 step="0.01"
                 value={value}
                 onChange={(e) => setOffsets({ ...offsets, [sensor]: Number(e.target.value) })}
-                className="w-full bg-slate-900 border border-slate-600 text-white px-4 py-3 rounded-lg focus:outline-none focus:border-amber-500"
+                className="w-full bg-white border border-gray-300 text-gray-900 px-4 py-3 rounded-lg focus:outline-none focus:border-amber-500"
               />
             </div>
           ))}
@@ -202,9 +202,9 @@ export default function Settings() {
         </button>
       </div>
 
-      <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Data Export</h3>
-        <p className="text-slate-400 text-sm mb-4">Export sensor readings to CSV format</p>
+      <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Data Export</h3>
+        <p className="text-gray-600 text-sm mb-4">Export sensor readings to CSV format</p>
         <button
           onClick={handleExportData}
           className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-2 rounded-lg transition-all"
@@ -214,26 +214,26 @@ export default function Settings() {
         </button>
       </div>
 
-      <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">System Information</h3>
+      <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">System Information</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-600">
-            <div className="text-sm text-slate-400 mb-1">Firmware Version</div>
-            <div className="text-xl font-semibold text-white">{firmwareVersion}</div>
+          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="text-sm text-gray-600 mb-1">Firmware Version</div>
+            <div className="text-xl font-semibold text-gray-900">{firmwareVersion}</div>
           </div>
-          <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-600">
-            <div className="text-sm text-slate-400 mb-1">System Architecture</div>
-            <div className="text-xl font-semibold text-white">ARM64</div>
+          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="text-sm text-gray-600 mb-1">System Architecture</div>
+            <div className="text-xl font-semibold text-gray-900">ARM64</div>
           </div>
         </div>
       </div>
 
-      <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">SSH Terminal</h3>
+      <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">SSH Terminal</h3>
         {!showTerminal ? (
           <button
             onClick={() => setShowTerminal(true)}
-            className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white font-medium px-6 py-2 rounded-lg transition-all"
+            className="flex items-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-900 font-medium px-6 py-2 rounded-lg transition-all"
           >
             <Terminal className="w-4 h-4" />
             Open Terminal
@@ -242,7 +242,7 @@ export default function Settings() {
           <div className="space-y-4">
             {!isAuthenticated ? (
               <div className="space-y-3">
-                <div className="flex items-center gap-2 text-slate-400 text-sm">
+                <div className="flex items-center gap-2 text-gray-600 text-sm">
                   <Lock className="w-4 h-4" />
                   <span>Terminal access is password protected</span>
                 </div>
@@ -251,7 +251,7 @@ export default function Settings() {
                   value={sshPassword}
                   onChange={(e) => setSshPassword(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleTerminalAuth()}
-                  className="w-full bg-slate-900 border border-slate-600 text-white px-4 py-3 rounded-lg focus:outline-none focus:border-amber-500"
+                  className="w-full bg-white border border-gray-300 text-gray-900 px-4 py-3 rounded-lg focus:outline-none focus:border-amber-500"
                   placeholder="Enter password (default: admin123)"
                 />
                 <button
@@ -263,9 +263,9 @@ export default function Settings() {
               </div>
             ) : (
               <div>
-                <div className="bg-slate-950 border border-slate-600 rounded-lg p-4 font-mono text-sm mb-3 h-64 overflow-y-auto">
+                <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 font-mono text-sm mb-3 h-64 overflow-y-auto">
                   {terminalOutput.map((line, i) => (
-                    <div key={i} className={line.startsWith('$') ? 'text-green-400' : 'text-slate-300'}>
+                    <div key={i} className={line.startsWith('$') ? 'text-green-400' : 'text-gray-300'}>
                       {line}
                     </div>
                   ))}
@@ -276,7 +276,7 @@ export default function Settings() {
                     value={terminalCommand}
                     onChange={(e) => setTerminalCommand(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleTerminalCommand()}
-                    className="flex-1 bg-slate-900 border border-slate-600 text-white px-4 py-2 rounded-lg focus:outline-none focus:border-amber-500 font-mono"
+                    className="flex-1 bg-white border border-gray-300 text-gray-900 px-4 py-2 rounded-lg focus:outline-none focus:border-amber-500 font-mono"
                     placeholder="Type command (try 'help')"
                   />
                   <button
@@ -292,8 +292,8 @@ export default function Settings() {
         )}
       </div>
 
-      <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">System Controls</h3>
+      <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">System Controls</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <button
             onClick={() => handleSystemAction('reboot')}
@@ -311,7 +311,7 @@ export default function Settings() {
           </button>
           <button
             onClick={() => handleSystemAction('sleep')}
-            className="flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-lg transition-all"
+            className="flex items-center justify-center gap-2 bg-gray-500 hover:bg-gray-600 text-white font-medium py-3 rounded-lg transition-all"
           >
             <Power className="w-4 h-4" />
             Sleep Mode
