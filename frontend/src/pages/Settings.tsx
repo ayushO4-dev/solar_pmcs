@@ -1,16 +1,26 @@
 import { useEffect, useState } from 'react';
 import { Save, Download, Terminal, Power, Lock } from 'lucide-react';
-import { supabase, SystemConfig, SensorOffset, SystemStatus } from '../lib/supabase';
+import { api, Angles, SensorOffsets, SystemStatusValue } from '../lib/api';
+
+// Run an API action, surfacing failures the same way the rest of the dashboard does
+const run = async (action: () => Promise<unknown>) => {
+  try {
+    await action();
+  } catch (e) {
+    alert(e instanceof Error ? e.message : String(e));
+  }
+};
 
 export default function Settings() {
   const [apiServer, setApiServer] = useState('');
-  const [offsets, setOffsets] = useState<Record<string, number>>({
+  const [offsets, setOffsets] = useState<SensorOffsets>({
     voltage: 0,
+    current: 0,
     wattage: 0,
-    ampere: 0,
     temperature: 0,
     humidity: 0
   });
+  const [angularOffset, setAngularOffset] = useState<Angles>({ yaw: 0, roll: 0 });
   const [firmwareVersion, setFirmwareVersion] = useState('1.0.0');
   const [sshPassword, setSshPassword] = useState('');
   const [showTerminal, setShowTerminal] = useState(false);
@@ -23,82 +33,50 @@ export default function Settings() {
   }, []);
 
   const fetchSettings = async () => {
-    const { data: config } = await supabase
-      .from('system_config')
-      .select('*')
-      .eq('key', 'api_server_address')
-      .maybeSingle();
+    const [config, sensorOffsets, panel, status] = await Promise.allSettled([
+      api.config.apiServer(),
+      api.sensor.offsets(),
+      api.panel.state(),
+      api.system.status(),
+    ]);
 
-    if (config) {
-      setApiServer(config.value);
+    if (config.status === 'fulfilled') {
+      setApiServer(config.value.value);
     }
 
-    const { data: offsetData } = await supabase
-      .from('sensor_offsets')
-      .select('*');
-
-    if (offsetData) {
-      const offsetMap: Record<string, number> = {};
-      offsetData.forEach(offset => {
-        offsetMap[offset.sensor_type] = offset.offset_value;
-      });
-      setOffsets(offsetMap);
+    if (sensorOffsets.status === 'fulfilled') {
+      setOffsets(sensorOffsets.value);
     }
 
-    const { data: status } = await supabase
-      .from('system_status')
-      .select('firmware_version')
-      .limit(1)
-      .maybeSingle();
+    if (panel.status === 'fulfilled') {
+      setAngularOffset(panel.value.offset);
+    }
 
-    if (status) {
-      setFirmwareVersion(status.firmware_version);
+    if (status.status === 'fulfilled') {
+      setFirmwareVersion(status.value.firmware_version);
     }
   };
 
-  const handleSaveApiServer = async () => {
-    await supabase
-      .from('system_config')
-      .update({ value: apiServer })
-      .eq('key', 'api_server_address');
+  const handleSaveApiServer = () =>
+    run(async () => {
+      await api.config.setApiServer(apiServer);
+      alert('API server address updated successfully!');
+    });
 
-    alert('API server address updated successfully!');
-  };
+  const handleSaveOffsets = () =>
+    run(async () => {
+      await api.sensor.updateOffsets(offsets);
+      alert('Sensor offsets updated successfully!');
+    });
 
-  const handleSaveOffsets = async () => {
-    for (const [sensorType, value] of Object.entries(offsets)) {
-      await supabase
-        .from('sensor_offsets')
-        .update({ offset_value: value })
-        .eq('sensor_type', sensorType);
-    }
+  const handleSaveAngularOffset = () =>
+    run(async () => {
+      await api.panel.setOffset(angularOffset);
+      alert('Panel angular offset updated successfully!');
+    });
 
-    alert('Sensor offsets updated successfully!');
-  };
-
-  const handleExportData = async () => {
-    const { data: readings } = await supabase
-      .from('sensor_readings')
-      .select('*')
-      .order('timestamp', { ascending: false })
-      .limit(1000);
-
-    if (readings) {
-      const csv = [
-        'Timestamp,Voltage,Wattage,Ampere,Temperature,Humidity',
-        ...readings.map(r =>
-          `${r.timestamp},${r.voltage},${r.wattage},${r.ampere},${r.temperature},${r.humidity}`
-        )
-      ].join('\n');
-
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `solar_data_${new Date().toISOString()}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
+  const handleExportData = () => {
+    window.location.href = api.sensor.exportUrl();
   };
 
   const handleTerminalAuth = () => {
@@ -141,14 +119,12 @@ export default function Settings() {
     setTerminalCommand('');
   };
 
-  const handleSystemAction = async (action: string) => {
+  const handleSystemAction = (action: SystemStatusValue) => {
     if (confirm(`Are you sure you want to ${action} the system?`)) {
-      await supabase
-        .from('system_status')
-        .update({ status: action })
-        .eq('id', (await supabase.from('system_status').select('id').limit(1).maybeSingle())?.data?.id || '');
-
-      alert(`System ${action} initiated!`);
+      run(async () => {
+        await api.system.setStatus(action);
+        alert(`System ${action} initiated!`);
+      });
     }
   };
 
@@ -164,7 +140,7 @@ export default function Settings() {
               value={apiServer}
               onChange={(e) => setApiServer(e.target.value)}
               className="w-full bg-white border border-gray-300 text-gray-900 px-4 py-3 rounded-lg focus:outline-none focus:border-amber-500"
-              placeholder="http://localhost:3000"
+              placeholder="http://localhost:8000"
             />
           </div>
           <button
@@ -199,6 +175,32 @@ export default function Settings() {
         >
           <Save className="w-4 h-4" />
           Save Offsets
+        </button>
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-900 mb-1">Panel Angular Offset</h3>
+        <p className="text-gray-600 text-sm mb-4">Calibration between reported panel angles and motor angles</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          {(['yaw', 'roll'] as const).map((axis) => (
+            <div key={axis}>
+              <label className="text-sm text-gray-600 mb-2 block capitalize">{axis} (°)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={angularOffset[axis]}
+                onChange={(e) => setAngularOffset({ ...angularOffset, [axis]: Number(e.target.value) })}
+                className="w-full bg-white border border-gray-300 text-gray-900 px-4 py-3 rounded-lg focus:outline-none focus:border-amber-500"
+              />
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={handleSaveAngularOffset}
+          className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-medium px-6 py-2 rounded-lg transition-all"
+        >
+          <Save className="w-4 h-4" />
+          Save Angular Offset
         </button>
       </div>
 
