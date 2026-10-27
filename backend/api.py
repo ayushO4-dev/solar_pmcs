@@ -45,13 +45,19 @@ import random
 import asyncio
 from contextlib import asynccontextmanager
 
-# Import functions from main.py
-from main import (
-    # get_sensor_data,
-    generate_optimal_angles,
-    json_op,
-    TIMEZONE, OP_HOURS
-)
+from app.config import settings
+from app.solar import generate_optimal_angles
+
+TIMEZONE = settings.timezone
+
+
+def json_op(mode: str, filename: str, data=None):
+    import json5
+    with open(f"data/{filename}", mode) as f:
+        if data:
+            json5.dump(data, f, indent=4)
+        else: data = json5.load(f);
+    return data
 
 # Global flag to control the background task
 tracking_task = None
@@ -469,7 +475,7 @@ async def get_optimal_angles():
         current_time = dt.datetime.now(tz)
         
         # Generate optimal angles for the configured time range
-        results = generate_optimal_angles(current_time, OP_HOURS)
+        results = generate_optimal_angles(current_time, settings.op_start, settings.op_span_hours)
         
         # Extract yaw and roll arrays
         yaw_angles = [int(r["yaw"]) for r in results]
