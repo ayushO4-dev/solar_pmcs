@@ -1,5 +1,15 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Home, Settings, Sliders, Menu, ChevronLeft } from 'lucide-react';
+import { api } from '../lib/api';
+
+// Badge label and colors per system status; full class names so Tailwind keeps them
+const STATUS_BADGES: Record<string, { label: string; badge: string; dot: string; text: string }> = {
+  active: { label: 'System Active', badge: 'bg-green-50 border-green-200', dot: 'bg-green-500 animate-pulse', text: 'text-green-700' },
+  sleep: { label: 'Sleep Mode', badge: 'bg-blue-50 border-blue-200', dot: 'bg-blue-500', text: 'text-blue-700' },
+  reboot: { label: 'Rebooting', badge: 'bg-amber-50 border-amber-200', dot: 'bg-amber-500 animate-pulse', text: 'text-amber-700' },
+  shutdown: { label: 'Shut Down', badge: 'bg-red-50 border-red-200', dot: 'bg-red-500', text: 'text-red-700' },
+  offline: { label: 'Offline', badge: 'bg-gray-100 border-gray-300', dot: 'bg-gray-400', text: 'text-gray-600' },
+};
 
 interface LayoutProps {
   children: ReactNode;
@@ -9,6 +19,20 @@ interface LayoutProps {
 
 export default function Layout({ children, currentPage, onNavigate }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [status, setStatus] = useState('offline');
+
+  useEffect(() => {
+    const fetchStatus = () =>
+      api.system.status()
+        .then((s) => setStatus(s.status))
+        .catch(() => setStatus('offline'));
+
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const badge = STATUS_BADGES[status] ?? STATUS_BADGES.offline;
 
   const menuItems = [
     { id: 'home', label: 'Home', icon: Home },
@@ -26,9 +50,9 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           <Menu className="w-6 h-6" />
         </button>
         <h1 className="text-xl font-semibold text-gray-900 capitalize flex-1 ml-4">{currentPage}</h1>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-full">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          <span className="text-sm text-green-700 font-medium">System Active</span>
+        <div className={`flex items-center gap-2 px-3 py-1.5 border rounded-full ${badge.badge}`}>
+          <div className={`w-2 h-2 rounded-full ${badge.dot}`}></div>
+          <span className={`text-sm font-medium ${badge.text}`}>{badge.label}</span>
         </div>
       </header>
 

@@ -39,6 +39,13 @@ async def set_expected(yaw: float, roll: float) -> Angles:
     return Angles(yaw=yaw, roll=roll)
 
 
+async def wake() -> None:
+    """An explicit move command takes the system out of sleep mode"""
+    await db.execute(
+        "UPDATE system_state SET status = 'active', updated_at = now() WHERE id = 1 AND status = 'sleep'"
+    )
+
+
 @router.get("/state", response_model=PanelState)
 async def get_panel_state():
     """Get realtime and expected angles, range and offset in one call"""
@@ -68,7 +75,9 @@ async def get_panel_expected():
 @router.post("/angle", response_model=Angles)
 async def update_panel_angle(angles: Angles):
     """Manually set the target angles"""
-    return await set_expected(angles.yaw, angles.roll)
+    result = await set_expected(angles.yaw, angles.roll)
+    await wake()
+    return result
 
 
 @router.get("/range", response_model=PanelRange)
@@ -156,7 +165,9 @@ async def apply_current_curve():
     state = await _get_state()
     yaw = max(state["yaw_min"], min(state["yaw_max"], row["yaw"]))
     roll = max(state["roll_min"], min(state["roll_max"], row["roll"]))
-    return await set_expected(yaw, roll)
+    result = await set_expected(yaw, roll)
+    await wake()
+    return result
 
 
 @router.get("/optimal", response_model=list[OptimalPoint])

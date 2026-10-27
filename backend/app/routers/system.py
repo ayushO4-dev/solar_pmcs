@@ -45,7 +45,8 @@ async def get_system_status():
 @router.post("/api/system/status", response_model=SystemStatus)
 async def update_system_status(update: StatusUpdate):
     """
-    Record a status change. "sleep" also stows the panel at its minimum angles.
+    Record a status change. "sleep" also stows the panel at its minimum angles;
+    the next manual move or applied curve point sets the status back to "active".
     Reboot and shutdown are recorded only; they do not act on the host yet.
     """
     if update.status == "sleep":
