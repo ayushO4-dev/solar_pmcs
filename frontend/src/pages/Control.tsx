@@ -1,121 +1,114 @@
 import { useEffect, useState } from 'react';
-import { RotateCcw, Power, Save, Trash2, Plus } from 'lucide-react';
-import { supabase, PanelPosition, AngleCurve } from '../lib/supabase';
+import { RotateCcw, Power, Save, Trash2, Plus, Sun, Pause, Play } from 'lucide-react';
+import { api, Angles, CurvePoint, PanelState } from '../lib/api';
 import SolarPanel3D from '../components/SolarPanel3D';
 
+// Run an API action, surfacing failures the same way the rest of the dashboard does
+const run = async (action: () => Promise<unknown>) => {
+  try {
+    await action();
+  } catch (e) {
+    alert(e instanceof Error ? e.message : String(e));
+  }
+};
+
 export default function Control() {
-  const [position, setPosition] = useState<PanelPosition>({
-    id: '',
-    vertical_angle: 90,
-    horizontal_angle: 0,
-    timestamp: new Date().toISOString()
-  });
-  const [curves, setCurves] = useState<AngleCurve[]>([]);
-  const [newCurve, setNewCurve] = useState({
-    time_hour: 6,
-    time_minute: 0,
-    vertical_angle: 90,
-    horizontal_angle: 0
-  });
+  const [panel, setPanel] = useState<PanelState | null>(null);
+  const [target, setTarget] = useState<Angles | null>(null);
+  const [trackingEnabled, setTrackingEnabled] = useState(true);
+  const [curves, setCurves] = useState<CurvePoint[]>([]);
+  const [newPoint, setNewPoint] = useState<CurvePoint>({ time: '06:30', yaw: 90, roll: 90 });
   const [showAddCurve, setShowAddCurve] = useState(false);
 
   useEffect(() => {
-    fetchPosition();
+    fetchPanel(true);
     fetchCurves();
+    api.system.tracking().then((t) => setTrackingEnabled(t.enabled)).catch(() => {});
+
+    // Poll so the 3D view follows the panel while the tracking loop moves it
+    const interval = setInterval(() => fetchPanel(false), 1000);
+    return () => clearInterval(interval);
   }, []);
 
-  const fetchPosition = async () => {
-    const { data } = await supabase
-      .from('panel_position')
-      .select('*')
-      .order('timestamp', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (data) {
-      setPosition(data);
+  const fetchPanel = async (resetTarget: boolean) => {
+    try {
+      const state = await api.panel.state();
+      setPanel(state);
+      if (resetTarget) setTarget(state.expected);
+    } catch {
+      // Backend unreachable; keep showing the last known state
     }
   };
 
   const fetchCurves = async () => {
-    const { data } = await supabase
-      .from('angle_curves')
-      .select('*')
-      .eq('is_active', true)
-      .order('time_hour', { ascending: true })
-      .order('time_minute', { ascending: true });
-
-    if (data) {
-      setCurves(data);
+    try {
+      setCurves(await api.panel.curves());
+    } catch {
+      // Backend unreachable; keep the last known curves
     }
   };
 
-  const updatePosition = async (vertical: number, horizontal: number) => {
-    await supabase
-      .from('panel_position')
-      .insert({
-        vertical_angle: vertical,
-        horizontal_angle: horizontal
-      });
-
-    fetchPosition();
-  };
-
-  const handleRecalibrate = async () => {
-    await updatePosition(90, 0);
-  };
-
-  const handleReset = async () => {
-    await updatePosition(90, 180);
-  };
-
-  const handleSleepMode = async () => {
-    await updatePosition(35, 0);
-    await supabase
-      .from('system_status')
-      .update({ status: 'sleep' })
-      .eq('id', (await supabase.from('system_status').select('id').limit(1).maybeSingle())?.data?.id || '');
-  };
-
-  const handleAddCurve = async () => {
-    await supabase
-      .from('angle_curves')
-      .insert(newCurve);
-
-    setNewCurve({
-      time_hour: 6,
-      time_minute: 0,
-      vertical_angle: 90,
-      horizontal_angle: 0
-    });
-    setShowAddCurve(false);
-    fetchCurves();
-  };
-
-  const handleDeleteCurve = async (id: string) => {
-    await supabase
-      .from('angle_curves')
-      .delete()
-      .eq('id', id);
-
-    fetchCurves();
-  };
-
-  const handleApplyCurves = async () => {
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-
-    const activeCurve = curves.find(curve => {
-      if (curve.time_hour === currentHour) {
-        return curve.time_minute <= currentMinute;
-      }
-      return curve.time_hour < currentHour;
+  const updatePosition = (angles: Angles) =>
+    run(async () => {
+      await api.panel.setAngle(angles);
+      setTarget(angles);
+      await fetchPanel(false);
     });
 
-    if (activeCurve) {
-      await updatePosition(activeCurve.vertical_angle, activeCurve.horizontal_angle);
-    }
+  const handleRecalibrate = () => {
+    if (panel) updatePosition({ yaw: panel.range.yaw[0], roll: 90 });
+  };
+
+  const handleReset = () => updatePosition({ yaw: 90, roll: 90 });
+
+  const handleSleepMode = () =>
+    run(async () => {
+      await api.system.setStatus('sleep');
+      await fetchPanel(true);
+    });
+
+  const handleToggleTracking = () =>
+    run(async () => {
+      const status = await api.system.setTracking(!trackingEnabled);
+      setTrackingEnabled(status.enabled);
+    });
+
+  const handleAddCurve = () =>
+    run(async () => {
+      await api.panel.upsertCurvePoint(newPoint);
+      setNewPoint({ time: '06:30', yaw: 90, roll: 90 });
+      setShowAddCurve(false);
+      await fetchCurves();
+    });
+
+  const handleDeleteCurve = (time: string) =>
+    run(async () => {
+      await api.panel.deleteCurvePoint(time);
+      await fetchCurves();
+    });
+
+  const handleLoadOptimal = () => {
+    if (curves.length > 0 && !confirm('Replace the current schedule with today\'s optimal angles?')) return;
+    run(async () => {
+      const optimal = await api.panel.optimal();
+      setCurves(await api.panel.replaceCurves(optimal.map(({ time, yaw, roll }) => ({ time, yaw, roll }))));
+    });
+  };
+
+  const handleApplyCurves = () =>
+    run(async () => {
+      setTarget(await api.panel.applyCurrentCurve());
+      await fetchPanel(false);
+    });
+
+  const yawRange = panel?.range.yaw ?? [0, 180];
+  const rollRange = panel?.range.roll ?? [35, 145];
+  const realtime = panel?.realtime ?? { yaw: 90, roll: 90 };
+  const slider = target ?? realtime;
+
+  const sliderBackground = (value: number, [min, max]: [number, number]) => {
+    const pct = ((value - min) / (max - min)) * 100;
+    return `linear-gradient(to right, #f59e0b 0%, #f59e0b ${pct}%, #e5e7eb ${pct}%, #e5e7eb 100%)`;
   };
 
   return (
@@ -124,62 +117,63 @@ export default function Control() {
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Solar Panel Position</h3>
           <SolarPanel3D
-            verticalAngle={position.vertical_angle}
-            horizontalAngle={position.horizontal_angle}
+            verticalAngle={realtime.roll}
+            horizontalAngle={realtime.yaw}
           />
         </div>
 
         <div className="space-y-6">
           <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Current Position</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Current Position</h3>
+              <span className="text-sm text-gray-500">
+                Now: yaw {realtime.yaw.toFixed(0)}°, roll {realtime.roll.toFixed(0)}°
+              </span>
+            </div>
 
             <div className="space-y-4">
               <div>
                 <label className="text-sm text-gray-600 mb-2 block">
-                  Vertical Angle (35° - 145°)
+                  Roll ({rollRange[0]}° - {rollRange[1]}°)
                 </label>
                 <div className="flex items-center gap-4">
                   <input
                     type="range"
-                    min="35"
-                    max="145"
-                    value={position.vertical_angle}
-                    onChange={(e) => setPosition({ ...position, vertical_angle: Number(e.target.value) })}
+                    min={rollRange[0]}
+                    max={rollRange[1]}
+                    value={slider.roll}
+                    onChange={(e) => setTarget({ ...slider, roll: Number(e.target.value) })}
                     className="flex-1 h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer"
-                    style={{
-                      background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${((position.vertical_angle - 35) / (145 - 35)) * 100}%, #e5e7eb ${((position.vertical_angle - 35) / (145 - 35)) * 100}%, #e5e7eb 100%)`
-                    }}
+                    style={{ background: sliderBackground(slider.roll, rollRange) }}
                   />
                   <span className="text-gray-900 font-semibold w-16 text-right">
-                    {position.vertical_angle.toFixed(0)}°
+                    {slider.roll.toFixed(0)}°
                   </span>
                 </div>
               </div>
 
               <div>
                 <label className="text-sm text-gray-600 mb-2 block">
-                  Horizontal Angle (0° - 360°)
+                  Yaw ({yawRange[0]}° - {yawRange[1]}°)
                 </label>
                 <div className="flex items-center gap-4">
                   <input
                     type="range"
-                    min="0"
-                    max="360"
-                    value={position.horizontal_angle}
-                    onChange={(e) => setPosition({ ...position, horizontal_angle: Number(e.target.value) })}
+                    min={yawRange[0]}
+                    max={yawRange[1]}
+                    value={slider.yaw}
+                    onChange={(e) => setTarget({ ...slider, yaw: Number(e.target.value) })}
                     className="flex-1 h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer"
-                    style={{
-                      background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${(position.horizontal_angle / 360) * 100}%, #e5e7eb ${(position.horizontal_angle / 360) * 100}%, #e5e7eb 100%)`
-                    }}
+                    style={{ background: sliderBackground(slider.yaw, yawRange) }}
                   />
                   <span className="text-gray-900 font-semibold w-16 text-right">
-                    {position.horizontal_angle.toFixed(0)}°
+                    {slider.yaw.toFixed(0)}°
                   </span>
                 </div>
               </div>
 
               <button
-                onClick={() => updatePosition(position.vertical_angle, position.horizontal_angle)}
+                onClick={() => updatePosition(slider)}
                 className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold py-3 rounded-lg hover:from-amber-600 hover:to-orange-600 transition-all shadow-sm"
               >
                 Update Position
@@ -205,8 +199,15 @@ export default function Control() {
                 Reset
               </button>
               <button
+                onClick={handleToggleTracking}
+                className="flex items-center justify-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-900 font-medium py-3 rounded-lg transition-all"
+              >
+                {trackingEnabled ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                {trackingEnabled ? 'Pause Tracking' : 'Resume Tracking'}
+              </button>
+              <button
                 onClick={handleSleepMode}
-                className="col-span-2 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-all"
+                className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-all"
               >
                 <Power className="w-4 h-4" />
                 Enter Sleep Mode
@@ -220,61 +221,57 @@ export default function Control() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Angle Adjustment Curves</h3>
-            <p className="text-sm text-gray-600 mt-1">Configure automated position adjustments based on time (6AM - 6PM)</p>
+            <p className="text-sm text-gray-600 mt-1">Configure automated position adjustments based on time of day</p>
           </div>
-          <button
-            onClick={() => setShowAddCurve(true)}
-            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-medium px-4 py-2 rounded-lg transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Add Point
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleLoadOptimal}
+              className="flex items-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-900 font-medium px-4 py-2 rounded-lg transition-all"
+            >
+              <Sun className="w-4 h-4" />
+              Load Optimal
+            </button>
+            <button
+              onClick={() => setShowAddCurve(true)}
+              className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-medium px-4 py-2 rounded-lg transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Add Point
+            </button>
+          </div>
         </div>
 
         {showAddCurve && (
           <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-300">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">Hour (6-18)</label>
+                <label className="text-xs text-gray-600 mb-1 block">Time</label>
                 <input
-                  type="number"
-                  min="6"
-                  max="18"
-                  value={newCurve.time_hour}
-                  onChange={(e) => setNewCurve({ ...newCurve, time_hour: Number(e.target.value) })}
+                  type="time"
+                  value={newPoint.time}
+                  onChange={(e) => setNewPoint({ ...newPoint, time: e.target.value })}
                   className="w-full bg-white border border-gray-300 text-gray-900 px-3 py-2 rounded"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">Minute</label>
+                <label className="text-xs text-gray-600 mb-1 block">Yaw °</label>
                 <input
                   type="number"
-                  min="0"
-                  max="59"
-                  value={newCurve.time_minute}
-                  onChange={(e) => setNewCurve({ ...newCurve, time_minute: Number(e.target.value) })}
+                  min={yawRange[0]}
+                  max={yawRange[1]}
+                  value={newPoint.yaw}
+                  onChange={(e) => setNewPoint({ ...newPoint, yaw: Number(e.target.value) })}
                   className="w-full bg-white border border-gray-300 text-gray-900 px-3 py-2 rounded"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">Vertical °</label>
+                <label className="text-xs text-gray-600 mb-1 block">Roll °</label>
                 <input
                   type="number"
-                  min="35"
-                  max="145"
-                  value={newCurve.vertical_angle}
-                  onChange={(e) => setNewCurve({ ...newCurve, vertical_angle: Number(e.target.value) })}
-                  className="w-full bg-white border border-gray-300 text-gray-900 px-3 py-2 rounded"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600 mb-1 block">Horizontal °</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="360"
-                  value={newCurve.horizontal_angle}
-                  onChange={(e) => setNewCurve({ ...newCurve, horizontal_angle: Number(e.target.value) })}
+                  min={rollRange[0]}
+                  max={rollRange[1]}
+                  value={newPoint.roll}
+                  onChange={(e) => setNewPoint({ ...newPoint, roll: Number(e.target.value) })}
                   className="w-full bg-white border border-gray-300 text-gray-900 px-3 py-2 rounded"
                 />
               </div>
@@ -299,33 +296,31 @@ export default function Control() {
         <div className="space-y-2 mb-4">
           {curves.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              No angle curves configured. Add points to enable automated tracking.
+              No angle curves configured. Add points or load the optimal curve to enable automated tracking.
             </div>
           ) : (
             curves.map((curve) => (
               <div
-                key={curve.id}
+                key={curve.time}
                 className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-amber-300 transition-all"
               >
                 <div className="flex items-center gap-6">
                   <div className="text-center">
-                    <div className="text-lg font-semibold text-gray-900">
-                      {String(curve.time_hour).padStart(2, '0')}:{String(curve.time_minute).padStart(2, '0')}
-                    </div>
+                    <div className="text-lg font-semibold text-gray-900">{curve.time}</div>
                     <div className="text-xs text-gray-500">Time</div>
                   </div>
                   <div className="w-px h-10 bg-gray-300"></div>
                   <div className="text-center">
-                    <div className="text-lg font-semibold text-amber-600">{curve.vertical_angle}°</div>
-                    <div className="text-xs text-gray-500">Vertical</div>
+                    <div className="text-lg font-semibold text-amber-600">{curve.roll}°</div>
+                    <div className="text-xs text-gray-500">Roll</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-lg font-semibold text-orange-600">{curve.horizontal_angle}°</div>
-                    <div className="text-xs text-gray-500">Horizontal</div>
+                    <div className="text-lg font-semibold text-orange-600">{curve.yaw}°</div>
+                    <div className="text-xs text-gray-500">Yaw</div>
                   </div>
                 </div>
                 <button
-                  onClick={() => handleDeleteCurve(curve.id)}
+                  onClick={() => handleDeleteCurve(curve.time)}
                   className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-all"
                 >
                   <Trash2 className="w-4 h-4" />
