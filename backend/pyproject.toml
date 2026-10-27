@@ -12,10 +12,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Raspberry Pi only: GPIO, I2C power monitor, DHT11 and Arduino serial drivers.
+# Raspberry Pi only: stepper GPIO (gpiod), I2C power monitor, DHT11 and Arduino serial drivers.
 hardware = [
     "gpiod>=2.1",
-    "RPi.GPIO>=0.7",
     "pi-ina219>=1.4",
     "adafruit-circuitpython-dht>=4.0",
     "pyserial>=3.5",

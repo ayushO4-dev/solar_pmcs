@@ -897,12 +897,6 @@ wheels = [
 ]
 
 [[package]]
-name = "rpi-gpio"
-version = "0.7.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/c4/0f/10b524a12b3445af1c607c27b2f5ed122ef55756e29942900e5c950735f2/RPi.GPIO-0.7.1.tar.gz", hash = "sha256:cd61c4b03c37b62bba4a5acfea9862749c33c618e0295e7e90aa4713fb373b70", size = 29090, upload-time = "2022-02-06T15:15:06.022Z" }
-
-[[package]]
 name = "spidev"
 version = "3.8"
 source = { registry = "https://pypi.org/simple" }
@@ -926,7 +920,6 @@ hardware = [
     { name = "gpiod" },
     { name = "pi-ina219" },
     { name = "pyserial" },
-    { name = "rpi-gpio" },
 ]
 
 [package.metadata]
@@ -939,7 +932,6 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.4" },
     { name = "pyserial", marker = "extra == 'hardware'", specifier = ">=3.5" },
     { name = "pysolar", specifier = ">=0.11" },
-    { name = "rpi-gpio", marker = "extra == 'hardware'", specifier = ">=0.7" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
 provides-extras = ["hardware"]

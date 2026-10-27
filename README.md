@@ -62,6 +62,18 @@ uv sync --extra hardware
 SENSOR_MODE=hardware uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
+## Hardware wiring
+
+| Device                          | Connection                                |
+| ------------------------------- | ----------------------------------------- |
+| Stepper motor 1 (TB6600)        | GPIO 17 step, GPIO 27 dir, GPIO 22 enable |
+| Stepper motor 2 (TB6600)        | GPIO 24 step, GPIO 25 dir, GPIO 16 enable |
+| DHT11 temperature/humidity      | GPIO 4                                    |
+| INA219 power monitor            | I2C bus 1 (GPIO 2 SDA, GPIO 3 SCL)        |
+| 4 × LDR via Arduino             | USB serial, `/dev/ttyACM0` at 9600 baud   |
+
+GPIO numbers are BCM. The motors use `gpiod` on `/dev/gpiochip4` (Raspberry Pi 5).
+
 ## Database
 
 The schema in `backend/db/init/001_schema.sql` runs only when the Postgres data
