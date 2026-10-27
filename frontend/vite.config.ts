@@ -7,4 +7,10 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  server: {
+    proxy: {
+      // FastAPI backend (backend/app); uvicorn's default port
+      '/api': 'http://localhost:8000',
+    },
+  },
 });
