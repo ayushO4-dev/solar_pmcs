@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Zap, Thermometer, Droplets, Clock, Calendar } from 'lucide-react';
-import { supabase, SensorReading, SystemStatus } from '../lib/supabase';
+import { api, SensorReading, SystemStatus } from '../lib/api';
+
+const fmt = (value: number | null | undefined, digits: number) =>
+  (value ?? 0).toFixed(digits);
 
 interface WeatherData {
   condition: string;
@@ -30,40 +33,27 @@ export default function Home() {
   }, []);
 
   const fetchLatestData = async () => {
-    const { data: sensorReading } = await supabase
-      .from('sensor_readings')
-      .select('*')
-      .order('timestamp', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const [latest, status, recent] = await Promise.allSettled([
+      api.sensor.latest(),
+      api.system.status(),
+      api.sensor.recent(20),
+    ]);
 
-    if (sensorReading) {
-      setSensorData(sensorReading);
+    if (latest.status === 'fulfilled') {
+      setSensorData(latest.value);
     }
 
-    const { data: status } = await supabase
-      .from('system_status')
-      .select('*')
-      .limit(1)
-      .maybeSingle();
-
-    if (status) {
-      setSystemStatus(status);
+    if (status.status === 'fulfilled') {
+      setSystemStatus(status.value);
     }
 
-    const { data: recentReadings } = await supabase
-      .from('sensor_readings')
-      .select('wattage, timestamp')
-      .order('timestamp', { ascending: false })
-      .limit(20);
-
-    if (recentReadings) {
-      const chartData = recentReadings.reverse().map((reading) => ({
-        time: new Date(reading.timestamp).toLocaleTimeString('en-US', {
+    if (recent.status === 'fulfilled') {
+      const chartData = recent.value.map((reading) => ({
+        time: new Date(reading.recorded_at).toLocaleTimeString('en-US', {
           hour: '2-digit',
           minute: '2-digit'
         }),
-        value: Number(reading.wattage)
+        value: reading.wattage ?? 0
       }));
       setGenerationData(chartData);
     }
@@ -89,7 +79,7 @@ export default function Home() {
             </div>
           </div>
           <div className="text-3xl font-bold text-gray-900 mb-1">
-            {sensorData?.voltage.toFixed(2) || '0.00'}
+            {fmt(sensorData?.voltage, 2)}
             <span className="text-lg text-gray-500 ml-2">V</span>
           </div>
           <div className="text-xs text-gray-500">Live reading</div>
@@ -103,7 +93,7 @@ export default function Home() {
             </div>
           </div>
           <div className="text-3xl font-bold text-gray-900 mb-1">
-            {sensorData?.wattage.toFixed(2) || '0.00'}
+            {fmt(sensorData?.wattage, 2)}
             <span className="text-lg text-gray-500 ml-2">W</span>
           </div>
           <div className="text-xs text-gray-500">Current generation</div>
@@ -117,7 +107,7 @@ export default function Home() {
             </div>
           </div>
           <div className="text-3xl font-bold text-gray-900 mb-1">
-            {sensorData?.ampere.toFixed(2) || '0.00'}
+            {fmt(sensorData?.current, 2)}
             <span className="text-lg text-gray-500 ml-2">A</span>
           </div>
           <div className="text-xs text-gray-500">Live reading</div>
@@ -131,7 +121,7 @@ export default function Home() {
             </div>
           </div>
           <div className="text-3xl font-bold text-gray-900 mb-1">
-            {sensorData?.temperature.toFixed(1) || '0.0'}
+            {fmt(sensorData?.temperature, 1)}
             <span className="text-lg text-gray-500 ml-2">°C</span>
           </div>
           <div className="text-xs text-gray-500">Ambient temperature</div>
@@ -145,7 +135,7 @@ export default function Home() {
             </div>
           </div>
           <div className="text-3xl font-bold text-gray-900 mb-1">
-            {sensorData?.humidity.toFixed(1) || '0.0'}
+            {fmt(sensorData?.humidity, 1)}
             <span className="text-lg text-gray-500 ml-2">%</span>
           </div>
           <div className="text-xs text-gray-500">Relative humidity</div>
